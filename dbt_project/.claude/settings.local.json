@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /d/Portfolio/dbt_project -type d -not -path */.history*)"
+    ]
+  }
+}

@@ -1,0 +1,78 @@
+version: 2
+
+models:
+  - name: dim__dates
+    description: "Calendrier de 2024 à 2029"
+    columns:
+      - name: timestamp_date
+        tests:
+          - unique
+          - not_null
+
+  - name: dim__qualifications
+    description: "Référentiel des qualifications"
+    columns:
+      - name: qualification_id
+        tests:
+          - unique
+          - not_null
+
+      - name: qualification_label
+        tests:
+          - not_null
+
+  - name: dim__sectors
+    description: "Référentiel des secteurs d'activité (NAF)"
+    columns:
+      - name: naf_id
+        tests:
+          - not_null
+        # Pas de test unique : un naf_id peut avoir plusieurs sector_code
+
+      - name: sector_code
+        tests:
+          - not_null
+
+  - name: dim__localisations
+    description: "Référentiel des localisations par code postal"
+    columns:
+      - name: postal_code
+        tests:
+          - not_null
+        # Pas de test unique : un code postal peut couvrir plusieurs communes
+
+      - name: region_name
+        tests:
+          - not_null
+
+  - name: dim__formations
+    description: "Référentiel des formations requises"
+    columns:
+      - name: formation_id
+        tests:
+          - unique
+          - not_null
+
+  - name: dim__skills
+    description: "Référentiel des compétences"
+    columns:
+      - name: skill_id
+        tests:
+          - unique
+          - not_null
+
+  - name: fct__job_offers
+    description: "Table de faits des offres d'emploi"
+    columns:
+      - name: job_offer_id
+        tests:
+          - unique
+          - not_null
+
+      - name: created_at
+        tests:
+          - not_null
+
+      - name: rome_code
+        tests:
+          - not_null

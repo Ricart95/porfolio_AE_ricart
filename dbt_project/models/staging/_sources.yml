@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: raw_france_travail
+    database: project-10ed9a80-cce2-4190-ae5
+    schema: raw_france_travail
+    tables:
+      - name: offres_emploi

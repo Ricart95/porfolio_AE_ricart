@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: job_offers
+    description: "Table métier principale enrichie avec toutes les dimensions"
+    columns:
+      - name: job_offer_id
+        tests:
+          - unique # Détecte tout fan-out depuis les jointures de dimensions
+          - not_null
+
+      - name: created_at
+        tests:
+          - not_null
+
+      - name: qualification_id
+        tests:
+          - relationships:
+              to: ref('dim__qualifications')
+              field: qualification_id
+
+      - name: postal_code
+        tests:
+          - relationships:
+              to: ref('dim__localisations')
+              field: postal_code
+              config:
+                severity: warn # LEFT JOIN intentionnelle : certains codes postaux absents du référentiel
+
+      - name: naf_id
+        tests:
+          - relationships:
+              to: ref('dim__sectors')
+              field: naf_id

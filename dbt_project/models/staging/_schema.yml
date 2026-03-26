@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: stg__job_offers
+    description: "Offres d'emploi brutes normalisées depuis France Travail"
+    columns:
+      - name: job_offer_id
+        description: "Identifiant unique de l'offre"
+        tests:
+          - unique
+          - not_null
+
+      - name: created_at
+        tests:
+          - not_null
+
+      - name: rome_code
+        tests:
+          - not_null
+
+      - name: contract_type_code
+        tests:
+          - not_null
+
+  - name: stg__postal_codes
+    description: "Référentiel des codes postaux français"
+    columns:
+      - name: postal_code
+        tests:
+          - not_null
+
+      - name: department_code
+        tests:
+          - not_null
+
+      - name: region_name
+        tests:
+          - not_null

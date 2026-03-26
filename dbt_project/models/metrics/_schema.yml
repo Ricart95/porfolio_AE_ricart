@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: metric__job_offers__region
+    description: "Nombre d'offres d'emploi par jour et par région"
+    columns:
+      - name: region_name
+        tests:
+          - not_null
+
+      - name: year
+        tests:
+          - not_null
+
+      - name: month
+        tests:
+          - not_null
+
+      - name: nb_offers
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
