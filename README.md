@@ -18,19 +18,19 @@ Ce projet permet d'identifier les dynamiques régionales du marché de l'emploi,
 API France Travail
        │
        ▼
-  Python Script          ← Ingestion via OAuth2 (3 000+ offres)
+  Python Script               ← Ingestion via OAuth2 (300 000 lignes)
        │
        ▼
-  BigQuery (raw)         ← raw_france_travail.offres_emploi
+  BigQuery (raw)              ← raw_france_travail.offres_emploi
        │
        ▼
-  dbt Core               ← Transformations : staging → intermediate → marts
+  dbt Core                    ← Transformations : staging → fact/dim → marts → metrics
        │
        ▼
-  BigQuery (marts)       ← Modèles prêts pour la BI
+  BigQuery (marts/metrics)    ← Modèles prêts pour la BI
        │
        ▼
-  Looker Studio          ← Dashboard interactif (à venir)
+  Looker Studio               ← Dashboard interactif (à venir)
 ```
 
 ---
@@ -58,7 +58,8 @@ portfolio-france-travail/
 │   ├── models/
 │   │   ├── staging/            # Nettoyage et typage des données brutes
 │   │   ├── intermediate/       # Logique métier intermédiaire
-│   │   └── marts/              # Modèles finaux exposés à la BI
+│   │   └── marts/              # Modèles "business ready"
+│   │   └── metrics/            # Variables alimentants les dashboards
 │   ├── macros/                 # Macros dbt réutilisables
 │   ├── tests/                  # Tests génériques et singuliers
 │   ├── dbt_project.yml
@@ -77,6 +78,7 @@ Le projet suit la convention de layering **staging → intermediate → marts** 
 - **Staging** (`stg_offres_emploi`) — Cast des types, renommage des colonnes, suppression des doublons. Une ligne = une offre brute nettoyée.
 - **Intermediate** — Enrichissements et jointures métier (ex. mapping codes NAF → libellés secteurs, normalisation des régions).
 - **Marts** (`mart_offres_by_region`, `mart_offres_by_secteur`, ...) — Agrégats prêts à consommer par Looker. Testés avec des contraintes `not_null`, `unique` et `accepted_values`.
+- **Modèle de métriques** — Modèle final exposé à Looker Studio, construit via un CROSS JOIN pour garantir la continuité temporelle (zéro offre = 0, pas de ligne manquante).
 
 ### Compétences dbt illustrées
 
@@ -119,9 +121,9 @@ CLIENT_ID=<ton_client_id_france_travail>
 CLIENT_SECRET=<ton_client_secret_france_travail>
 ```
 
-Configurer `dbt_project/profiles.yml` avec tes credentials BigQuery (voir [documentation dbt](https://docs.getdbt.com/docs/core/connect-data-platform/bigquery-setup)).
+Configurer `dbt_project/profiles.yml` avec les credentials BigQuery (voir [documentation dbt](https://docs.getdbt.com/docs/core/connect-data-platform/bigquery-setup)).
 
-### Lancer la pipeline
+### Lancer le pipeline
 
 ```bash
 # 1. Ingestion des données
@@ -143,20 +145,17 @@ Un rapport Looker Studio sera connecté aux marts BigQuery pour visualiser :
 
 - Carte de France — nombre d'offres par région
 - Top secteurs d'activité par volume d'offres
-- Répartition CDI / CDD / Intérim
-- Évolution temporelle des publications
+- Métiers les plus tendus
 
 ---
 
 ## 👤 Auteur
 
-**Benoit** — Analytics Engineer  
-Passionné par la data engineering et la valorisation des données publiques.  
-[LinkedIn](#) · [GitHub](#)
+**Benoit Ricart** — Analytics Engineer  
+[LinkedIn](https://www.linkedin.com/in/benoît-ricart-08961112a/) · [GitHub](https://github.com/Ricart95/porfolio_AE_ricart)
 
 ---
 
-## 📄 Licence
+## 📄 Source
 
-Ce projet est open source sous licence MIT.  
-Les données proviennent de l'[API France Travail](https://francetravail.io) — usage soumis aux CGU du service.
+Les données proviennent de l'[API France Travail](https://francetravail.io)
