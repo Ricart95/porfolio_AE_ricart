@@ -113,9 +113,9 @@ services:
       GITSYNC_PERIOD: 30s
       GITSYNC_USERNAME: ${GIT_SYNC_USERNAME}
       GITSYNC_PASSWORD: ${GIT_SYNC_PASSWORD}
-  volumes:
-    - gitsync-data:/git
-  restart: always
+    volumes:
+      - gitsync-data:/git
+    restart: always
 
   redis:
     # Redis is limited to 7.2-bookworm due to licencing change
