@@ -105,14 +105,14 @@ services:
       start_period: 5s
     restart: always
   gitsync:
-  image: registry.k8s.io/git-sync/git-sync:v4.2.1
-  environment:
-    GITSYNC_REPO: https://github.com/Ricart95/porfolio_AE_ricart.git
-    GITSYNC_ROOT: /git
-    GITSYNC_LINK: repo
-    GITSYNC_PERIOD: 30s
-    GITSYNC_USERNAME: ${GIT_SYNC_USERNAME}
-    GITSYNC_PASSWORD: ${GIT_SYNC_PASSWORD}
+    image: registry.k8s.io/git-sync/git-sync:v4.2.1
+    environment:
+      GITSYNC_REPO: https://github.com/Ricart95/porfolio_AE_ricart.git
+      GITSYNC_ROOT: /git
+      GITSYNC_LINK: repo
+      GITSYNC_PERIOD: 30s
+      GITSYNC_USERNAME: ${GIT_SYNC_USERNAME}
+      GITSYNC_PASSWORD: ${GIT_SYNC_PASSWORD}
   volumes:
     - gitsync-data:/git
   restart: always
