@@ -29,6 +29,11 @@ with DAG(
         python_callable=fetch_offres
     )
 
+    dbt_deps = BashOperator(
+        task_id='dbt_deps',
+        bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt deps',
+    )
+
     dbt_run = BashOperator(
         task_id='run_dbt',
         bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt run'
@@ -49,4 +54,4 @@ with DAG(
         bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt test --target prod',
     )
 
-    ingestion >> dbt_run >> dbt_test >> dbt_run_prod >> dbt_test_prod
+    ingestion >> dbt_deps >> dbt_run >> dbt_test >> dbt_run_prod >> dbt_test_prod
