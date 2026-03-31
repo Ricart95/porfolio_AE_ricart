@@ -7,7 +7,7 @@ from airflow.providers.standard.operators.python import PythonOperator
 def fetch_offres():
     import subprocess
     subprocess.run(
-        ['python', '/opt/airflow/API/fetch_offres.py'], check=True
+        ['python', '/opt/airflow/repo/repo/API/fetch_offres.py'], check=True
     )
 
 
@@ -31,22 +31,22 @@ with DAG(
 
     dbt_run = BashOperator(
         task_id='run_dbt',
-        bash_command='cd /opt/airflow/dbt_project && dbt run'
+        bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt run'
     )
 
     dbt_test = BashOperator(
         task_id='dbt_test',
-        bash_command='cd /opt/airflow/dbt_project && dbt test',
+        bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt test',
     )
 
     dbt_run_prod = BashOperator(
         task_id='run_dbt_prod',
-        bash_command='cd /opt/airflow/dbt_project && dbt run --target prod'
+        bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt run --target prod'
     )
 
     dbt_test_prod = BashOperator(
         task_id='dbt_test_prod',
-        bash_command='cd /opt/airflow/dbt_project && dbt test --target prod',
+        bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt test --target prod',
     )
 
     ingestion >> dbt_run >> dbt_test >> dbt_run_prod >> dbt_test_prod

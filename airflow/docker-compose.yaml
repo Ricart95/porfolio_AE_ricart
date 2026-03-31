@@ -80,8 +80,7 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
-    - D:\Portfolio\API:/opt/airflow/API
-    - D:\Portfolio\dbt_project:/opt/airflow/dbt_project
+    - gitsync-data:/opt/airflow/repo
     - C:\Users\Ricar\AppData\Roaming\gcloud:/opt/airflow/gcloud
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on: &airflow-common-depends-on
@@ -105,6 +104,18 @@ services:
       retries: 5
       start_period: 5s
     restart: always
+  gitsync:
+  image: registry.k8s.io/git-sync/git-sync:v4.2.1
+  environment:
+    GITSYNC_REPO: https://github.com/Ricart95/porfolio_AE_ricart.git
+    GITSYNC_ROOT: /git
+    GITSYNC_LINK: repo
+    GITSYNC_PERIOD: 30s
+    GITSYNC_USERNAME: ${GIT_SYNC_USERNAME}
+    GITSYNC_PASSWORD: ${GIT_SYNC_PASSWORD}
+  volumes:
+    - gitsync-data:/git
+  restart: always
 
   redis:
     # Redis is limited to 7.2-bookworm due to licencing change
@@ -349,3 +360,4 @@ services:
 
 volumes:
   postgres-db-volume:
+  gitsync-data:
