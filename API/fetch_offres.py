@@ -7,10 +7,8 @@ import time
 
 load_dotenv()
 
-CLIENT_ID = os.getenv(
-    "FT_CLIENT_ID")
-CLIENT_SECRET = os.getenv(
-    "FT_CLIENT_SECRET")
+CLIENT_ID = os.getenv("FT_CLIENT_ID")
+CLIENT_SECRET = os.getenv("FT_CLIENT_SECRET")
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 BQ_DATASET = "raw_france_travail"
 BQ_TABLE = "offres_emploi"
@@ -78,17 +76,16 @@ def fetch_all_offres(token, departement, max_offres=3000):
         debut += batch_size
         time.sleep(0.5)
 
-    print(f"Total offres récupérées : {len(all_offres)}")
     return all_offres
 
 
-def load_to_bigquery(offres, first_load=False):
+def load_to_bigquery(offres):
     df = pd.DataFrame(offres)
     client = bigquery.Client(project=GCP_PROJECT_ID)
     table_id = f"{GCP_PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}"
 
     job_config = bigquery.LoadJobConfig(
-        write_disposition="WRITE_TRUNCATE" if first_load else "WRITE_APPEND",
+        write_disposition="WRITE_TRUNCATE",
         autodetect=True,
     )
 
@@ -99,8 +96,7 @@ def load_to_bigquery(offres, first_load=False):
 
 if __name__ == "__main__":
     token = get_token()
-    total = 0
-    first_load = True
+    all_offres = []
 
     for i, dept in enumerate(DEPARTEMENTS):
         if i > 0 and i % 20 == 0:
@@ -111,11 +107,12 @@ if __name__ == "__main__":
         try:
             offres = fetch_all_offres(token, departement=dept)
             if offres:
-                load_to_bigquery(offres, first_load=first_load)
-                first_load = False
-                total += len(offres)
+                all_offres.extend(offres)
         except Exception as e:
             print(f"❌ Erreur pour le département {dept} : {e}")
             continue
 
-    print(f"\n🎉 Terminé ! Total offres chargées : {total}")
+    if all_offres:
+        load_to_bigquery(all_offres)
+
+    print(f"\n🎉 Terminé ! Total offres chargées : {len(all_offres)}")
