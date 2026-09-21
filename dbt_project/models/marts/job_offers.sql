@@ -5,6 +5,15 @@ with
         from {{ ref('fct__job_offers') }}
     ),
 
+    enriched as (
+        select
+            *,
+            date_diff(CURRENT_TIMESTAMP(), created_at, day) as days_since_creation
+            
+
+        from source
+    ),
+
     final as (
         select
             -- Ids
@@ -42,21 +51,26 @@ with
 
             -- Integers
             number_of_positions,
+            days_since_creation,
 
             -- Booleans
             is_apprenticeship,
             is_disabled_accessible,
             is_hard_to_fill,
             is_adapted_company,
+            case
+                when region_name = 'Ile-de-France' then True
+                else False
+            end as is_idf,
 
             -- Timestamps
             created_at,
             updated_at
 
-        from source
-        left join {{ ref('dim__qualifications') }}   using(qualification_id)
-        left join {{ ref('dim__localisations') }}    using(postal_code)
-        left join {{ ref('dim__sectors') }}          using(naf_id)
+        from enriched
+        left join {{ ref('dim__qualifications') }}      using(qualification_id)
+        left join {{ ref('dim__localisations') }}       using(postal_code)
+        left join {{ ref('dim__sectors') }}             using(naf_id)
 
     )
 
