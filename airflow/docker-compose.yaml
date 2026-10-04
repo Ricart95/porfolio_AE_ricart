@@ -117,6 +117,8 @@ services:
       GITSYNC_PERIOD: 30s
       GITSYNC_USERNAME: ${GIT_SYNC_USERNAME}
       GITSYNC_PASSWORD: ${GIT_SYNC_PASSWORD}
+    # Same UID as Airflow: airflow-init chowns /opt/airflow (incl. the repo volume) to AIRFLOW_UID
+    user: "${AIRFLOW_UID:-50000}:0"
     volumes:
       - gitsync-data:/git
     restart: always
