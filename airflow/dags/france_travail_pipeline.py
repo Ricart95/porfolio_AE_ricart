@@ -22,6 +22,8 @@ with DAG(
     schedule='0 8 * * *',
     start_date=datetime(2026, 3, 1),
     catchup=False,
+    # Un seul run à la fois : deux ingestions en parallèle saturent la RAM de Docker (OOM)
+    max_active_runs=1,
     default_args=default_args
 ) as dag:
 

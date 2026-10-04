@@ -2,7 +2,10 @@ import requests
 import pandas as pd
 from google.cloud import bigquery
 from dotenv import load_dotenv
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import os
+import sys
 import time
 
 load_dotenv()
@@ -12,6 +15,19 @@ CLIENT_SECRET = os.getenv("FT_CLIENT_SECRET")
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 BQ_DATASET = "raw_france_travail"
 BQ_TABLE = "offres_emploi"
+
+REQUEST_TIMEOUT = 30
+# Au-delà de ce taux de départements en échec, on ne charge pas (WRITE_TRUNCATE écraserait les données)
+MAX_FAILURE_RATIO = 0.05
+
+# Retente automatiquement sur quota dépassé (429) et erreurs serveur, en respectant Retry-After
+session = requests.Session()
+session.mount("https://", HTTPAdapter(max_retries=Retry(
+    total=5,
+    backoff_factor=1,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=frozenset({"GET", "POST"}),
+)))
 
 DEPARTEMENTS = [
     "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
@@ -28,7 +44,7 @@ DEPARTEMENTS = [
 
 
 def get_token():
-    response = requests.post(
+    response = session.post(
         "https://entreprise.francetravail.fr/connexion/oauth2/access_token",
         params={"realm": "/partenaire"},
         data={
@@ -36,7 +52,8 @@ def get_token():
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
             "scope": "api_offresdemploiv2 o2dsoffre"
-        }
+        },
+        timeout=REQUEST_TIMEOUT
     )
     response.raise_for_status()
     return response.json()["access_token"]
@@ -44,17 +61,21 @@ def get_token():
 
 def fetch_offres(token, departement, debut=0, fin=150):
     headers = {"Authorization": f"Bearer {token}"}
+    # L'API pagine via range=premier-dernier (bornes incluses, 150 max par appel)
     params = {
-        "debut": debut,
-        "fin": fin,
+        "range": f"{debut}-{fin - 1}",
         "departement": departement
     }
-    response = requests.get(
+    response = session.get(
         "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search",
         headers=headers,
-        params=params
+        params=params,
+        timeout=REQUEST_TIMEOUT
     )
     response.raise_for_status()
+    # 204 No Content : aucune offre, corps vide
+    if response.status_code == 204:
+        return []
     return response.json().get("resultats", [])
 
 
@@ -73,6 +94,9 @@ def fetch_all_offres(token, departement, max_offres=3000):
         for offre in offres:
             offre["departement_recherche"] = departement
         all_offres.extend(offres)
+        # Page incomplète : plus rien après
+        if len(offres) < batch_size:
+            break
         debut += batch_size
         time.sleep(0.5)
 
@@ -97,6 +121,7 @@ def load_to_bigquery(offres):
 if __name__ == "__main__":
     token = get_token()
     all_offres = []
+    failed_depts = []
 
     for i, dept in enumerate(DEPARTEMENTS):
         if i > 0 and i % 20 == 0:
@@ -110,9 +135,19 @@ if __name__ == "__main__":
                 all_offres.extend(offres)
         except Exception as e:
             print(f"❌ Erreur pour le département {dept} : {e}")
+            failed_depts.append(dept)
             continue
 
-    if all_offres:
-        load_to_bigquery(all_offres)
+    failure_ratio = len(failed_depts) / len(DEPARTEMENTS)
+    if failed_depts:
+        print(f"⚠️ {len(failed_depts)} département(s) en échec : {', '.join(failed_depts)}")
+
+    # Exit non nul => la tâche Airflow échoue au lieu de passer au vert avec une table tronquée
+    if failure_ratio > MAX_FAILURE_RATIO:
+        sys.exit(f"❌ Trop d'échecs ({failure_ratio:.0%} > {MAX_FAILURE_RATIO:.0%}), chargement annulé")
+    if not all_offres:
+        sys.exit("❌ Aucune offre récupérée, chargement annulé")
+
+    load_to_bigquery(all_offres)
 
     print(f"\n🎉 Terminé ! Total offres chargées : {len(all_offres)}")
