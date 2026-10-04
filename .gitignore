@@ -5,6 +5,5 @@ portfolio_env
 .history
 .env
 dbt_internal_packages/
-profiles.yml
 __pycache__/
 *.pyc

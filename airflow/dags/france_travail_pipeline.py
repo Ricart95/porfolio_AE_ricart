@@ -21,7 +21,8 @@ with DAG(
     dag_id='france_travail_pipeline',
     schedule='0 8 * * *',
     start_date=datetime(2026, 3, 1),
-    catchup=False
+    catchup=False,
+    default_args=default_args
 ) as dag:
 
     ingestion = PythonOperator(

@@ -1,0 +1,21 @@
+dbt_project:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      threads: 4
+      project: "{{ env_var('GCP_PROJECT_ID', 'project-10ed9a80-cce2-4190-ae5') }}"
+      location: EU
+      timeout_seconds: 300
+      priority: interactive
+      dataset: dbt_dev
+    prod:
+      type: bigquery
+      method: oauth
+      threads: 4
+      project: "{{ env_var('GCP_PROJECT_ID', 'project-10ed9a80-cce2-4190-ae5') }}"
+      location: EU
+      timeout_seconds: 300
+      priority: interactive
+      dataset: dbt
