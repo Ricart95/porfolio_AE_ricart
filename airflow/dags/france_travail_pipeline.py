@@ -38,7 +38,7 @@ with DAG(
 
     dbt_run = BashOperator(
         task_id='run_dbt',
-        bash_command=DBT_CMD + 'run'
+        bash_command=DBT_CMD + 'seed && dbt run'
     )
 
     dbt_test = BashOperator(
@@ -48,7 +48,7 @@ with DAG(
 
     dbt_run_prod = BashOperator(
         task_id='run_dbt_prod',
-        bash_command=DBT_CMD + 'run --target prod'
+        bash_command=DBT_CMD + 'seed --target prod && dbt run --target prod'
     )
 
     dbt_test_prod = BashOperator(
