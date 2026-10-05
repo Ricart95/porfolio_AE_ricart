@@ -7,7 +7,7 @@ from airflow.providers.standard.operators.python import PythonOperator
 def fetch_offres():
     import subprocess
     subprocess.run(
-        ['python', '/opt/airflow/repo/repo/API/fetch_offres.py'], check=True
+        ['python', '-u', '/opt/airflow/repo/repo/API/fetch_offres.py'], check=True
     )
 
 

@@ -4,9 +4,9 @@ from google.cloud import bigquery
 from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import sys
-import time
 
 load_dotenv()
 
@@ -19,6 +19,8 @@ BQ_TABLE = "offres_emploi"
 REQUEST_TIMEOUT = 30
 # Au-delà de ce taux de départements en échec, on ne charge pas (WRITE_TRUNCATE écraserait les données)
 MAX_FAILURE_RATIO = 0.05
+# Départements récupérés en parallèle ; rester bas pour ne pas dépasser le quota de l'API (~10 appels/s)
+MAX_WORKERS = 4
 
 # Retente automatiquement sur quota dépassé (429) et erreurs serveur, en respectant Retry-After
 session = requests.Session()
@@ -98,7 +100,6 @@ def fetch_all_offres(token, departement, max_offres=3000):
         if len(offres) < batch_size:
             break
         debut += batch_size
-        time.sleep(0.5)
 
     return all_offres
 
@@ -118,25 +119,25 @@ def load_to_bigquery(offres):
     print(f"✅ {len(df)} offres chargées dans {table_id}")
 
 
+def fetch_departement(dept):
+    # Un token par département : pas de risque d'expiration ni de partage entre threads
+    print(f"📍 Traitement du département {dept}...")
+    return fetch_all_offres(get_token(), departement=dept)
+
+
 if __name__ == "__main__":
-    token = get_token()
     all_offres = []
     failed_depts = []
 
-    for i, dept in enumerate(DEPARTEMENTS):
-        if i > 0 and i % 20 == 0:
-            print("🔄 Renouvellement du token...")
-            token = get_token()
-
-        print(f"📍 Traitement du département {dept}...")
-        try:
-            offres = fetch_all_offres(token, departement=dept)
-            if offres:
-                all_offres.extend(offres)
-        except Exception as e:
-            print(f"❌ Erreur pour le département {dept} : {e}")
-            failed_depts.append(dept)
-            continue
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = {pool.submit(fetch_departement, dept): dept for dept in DEPARTEMENTS}
+        for future in as_completed(futures):
+            dept = futures[future]
+            try:
+                all_offres.extend(future.result())
+            except Exception as e:
+                print(f"❌ Erreur pour le département {dept} : {e}")
+                failed_depts.append(dept)
 
     failure_ratio = len(failed_depts) / len(DEPARTEMENTS)
     if failed_depts:
