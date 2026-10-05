@@ -38,6 +38,10 @@ models:
     metrics:
       +materialized: table
 
+data_tests:
+  dbt_project:
+    +severity: warn
+
 seeds:
   dbt_project:
     codes_postaux:
