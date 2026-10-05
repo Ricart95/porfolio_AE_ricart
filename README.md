@@ -18,10 +18,10 @@ Ce projet permet d'identifier les dynamiques régionales du marché de l'emploi,
 API France Travail
        │
        ▼
-  Python Script               ← Ingestion via OAuth2 (300 000 lignes)
+  Python Script               ← Ingestion incrémentale via OAuth2 (nouvelles offres du jour)
        │
        ▼
-  BigQuery (raw)              ← raw_france_travail.offres_emploi
+  BigQuery (raw)              ← raw_france_travail.offres_emploi_historique (partitionnée par date de création)
        │
        ▼
   dbt Core                    ← Transformations : staging → fact/dim → marts → metrics

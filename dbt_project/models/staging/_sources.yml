@@ -5,4 +5,5 @@ sources:
     database: project-10ed9a80-cce2-4190-ae5
     schema: raw_france_travail
     tables:
-      - name: offres_emploi
+      - name: offres_emploi_historique
+        description: "Historique des offres, alimenté chaque jour par fetch_offres.py (partitionné par date_creation)"

@@ -1,7 +1,9 @@
 with 
     source as (
         select *
-        from {{ source('raw_france_travail', 'offres_emploi') }}
+        from {{ source('raw_france_travail', 'offres_emploi_historique') }}
+        -- Une offre peut être chargée plusieurs fois (recouvrement entre runs) : on garde la plus à jour
+        qualify row_number() over (partition by id order by dateActualisation desc) = 1
     ),
 
     final as (

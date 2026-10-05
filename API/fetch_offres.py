@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta, timezone
+from google.api_core.exceptions import NotFound
 import os
 import sys
 
@@ -14,11 +16,15 @@ CLIENT_ID = os.getenv("FT_CLIENT_ID")
 CLIENT_SECRET = os.getenv("FT_CLIENT_SECRET")
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 BQ_DATASET = "raw_france_travail"
-BQ_TABLE = "offres_emploi"
+# Historique : une ligne par offre, alimentée chaque jour avec les nouvelles offres seulement
+BQ_TABLE = "offres_emploi_historique"
 
 REQUEST_TIMEOUT = 30
-# Au-delà de ce taux de départements en échec, on ne charge pas (WRITE_TRUNCATE écraserait les données)
-MAX_FAILURE_RATIO = 0.05
+# Aucun échec toléré : le prochain run repart de la dernière date chargée,
+# les offres d'un département en échec sur cette période seraient perdues
+MAX_FAILURE_RATIO = 0
+# Recouvrement avec le run précédent pour ne rater aucune offre (doublons supprimés dans dbt)
+OVERLAP = timedelta(hours=6)
 # Départements récupérés en parallèle ; rester bas pour ne pas dépasser le quota de l'API (~10 appels/s)
 MAX_WORKERS = 4
 
@@ -61,13 +67,17 @@ def get_token():
     return response.json()["access_token"]
 
 
-def fetch_offres(token, departement, debut=0, fin=150):
+def fetch_offres(token, departement, debut=0, fin=150, min_creation=None):
     headers = {"Authorization": f"Bearer {token}"}
     # L'API pagine via range=premier-dernier (bornes incluses, 150 max par appel)
     params = {
         "range": f"{debut}-{fin - 1}",
         "departement": departement
     }
+    if min_creation:
+        # L'API exige les deux bornes ensemble
+        params["minCreationDate"] = min_creation.strftime("%Y-%m-%dT%H:%M:%SZ")
+        params["maxCreationDate"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     response = session.get(
         "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search",
         headers=headers,
@@ -81,7 +91,7 @@ def fetch_offres(token, departement, debut=0, fin=150):
     return response.json().get("resultats", [])
 
 
-def fetch_all_offres(token, departement, max_offres=3000):
+def fetch_all_offres(token, departement, max_offres=3000, min_creation=None):
     all_offres = []
     batch_size = 150
     debut = 0
@@ -90,7 +100,7 @@ def fetch_all_offres(token, departement, max_offres=3000):
         fin = debut + batch_size
         print(f"Récupération des offres {debut} à {fin}...")
         offres = fetch_offres(
-            token, departement=departement, debut=debut, fin=fin)
+            token, departement=departement, debut=debut, fin=fin, min_creation=min_creation)
         if not offres:
             break
         for offre in offres:
@@ -101,17 +111,41 @@ def fetch_all_offres(token, departement, max_offres=3000):
             break
         debut += batch_size
 
+    # L'API ne renvoie pas plus de 3000 offres par recherche
+    if len(all_offres) >= max_offres:
+        print(f"⚠️ Département {departement} : plafond de {max_offres} offres atteint, offres potentiellement manquantes")
     return all_offres
+
+
+def get_last_creation_date():
+    """Date de création la plus récente déjà chargée, None si l'historique n'existe pas encore."""
+    client = bigquery.Client(project=GCP_PROJECT_ID)
+    try:
+        rows = client.query(
+            f"select max(timestamp(replace(dateCreation, 'Z', '+00:00'))) as last_date "
+            f"from `{GCP_PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}`"
+        ).result()
+    except NotFound:
+        return None
+    return next(iter(rows)).last_date
 
 
 def load_to_bigquery(offres):
     df = pd.DataFrame(offres)
+    # Colonne de partitionnement : les requêtes filtrées par date ne lisent que les jours utiles
+    df["date_creation"] = pd.to_datetime(df["dateCreation"], utc=True).dt.date
     client = bigquery.Client(project=GCP_PROJECT_ID)
     table_id = f"{GCP_PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}"
 
     job_config = bigquery.LoadJobConfig(
-        write_disposition="WRITE_TRUNCATE",
+        write_disposition="WRITE_APPEND",
         autodetect=True,
+        time_partitioning=bigquery.TimePartitioning(field="date_creation"),
+        # Le schéma détecté varie selon les offres du jour (champs absents, nouveaux champs)
+        schema_update_options=[
+            bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
+            bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION,
+        ],
     )
 
     job = client.load_table_from_dataframe(df, table_id, job_config=job_config)
@@ -119,18 +153,27 @@ def load_to_bigquery(offres):
     print(f"✅ {len(df)} offres chargées dans {table_id}")
 
 
-def fetch_departement(dept):
+def fetch_departement(dept, min_creation):
     # Un token par département : pas de risque d'expiration ni de partage entre threads
     print(f"📍 Traitement du département {dept}...")
-    return fetch_all_offres(get_token(), departement=dept)
+    return fetch_all_offres(get_token(), departement=dept, min_creation=min_creation)
 
 
 if __name__ == "__main__":
     all_offres = []
     failed_depts = []
 
+    last_date = get_last_creation_date()
+    if last_date is None:
+        # Premier run : on initialise l'historique avec toutes les offres en ligne
+        min_creation = None
+        print("🆕 Historique vide : récupération de toutes les offres en ligne")
+    else:
+        min_creation = last_date - OVERLAP
+        print(f"📅 Récupération des offres créées depuis le {min_creation:%Y-%m-%d %H:%M} UTC")
+
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {pool.submit(fetch_departement, dept): dept for dept in DEPARTEMENTS}
+        futures = {pool.submit(fetch_departement, dept, min_creation): dept for dept in DEPARTEMENTS}
         for future in as_completed(futures):
             dept = futures[future]
             try:
@@ -143,7 +186,7 @@ if __name__ == "__main__":
     if failed_depts:
         print(f"⚠️ {len(failed_depts)} département(s) en échec : {', '.join(failed_depts)}")
 
-    # Exit non nul => la tâche Airflow échoue au lieu de passer au vert avec une table tronquée
+    # Exit non nul => la tâche Airflow échoue et le prochain run repart de la même date
     if failure_ratio > MAX_FAILURE_RATIO:
         sys.exit(f"❌ Trop d'échecs ({failure_ratio:.0%} > {MAX_FAILURE_RATIO:.0%}), chargement annulé")
     if not all_offres:
