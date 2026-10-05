@@ -11,6 +11,10 @@ def fetch_offres():
     )
 
 
+# gitsync recrée le dossier du repo à chaque commit (sans dbt_packages, ignoré par git) :
+# chaque tâche réinstalle les packages pour pouvoir être relancée seule
+DBT_CMD = 'cd /opt/airflow/repo/repo/dbt_project && dbt deps --quiet && dbt '
+
 default_args = {
     'owner': 'airflow',
     'retries': 1,
@@ -32,29 +36,24 @@ with DAG(
         python_callable=fetch_offres
     )
 
-    dbt_deps = BashOperator(
-        task_id='dbt_deps',
-        bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt deps',
-    )
-
     dbt_run = BashOperator(
         task_id='run_dbt',
-        bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt run'
+        bash_command=DBT_CMD + 'run'
     )
 
     dbt_test = BashOperator(
         task_id='dbt_test',
-        bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt test',
+        bash_command=DBT_CMD + 'test',
     )
 
     dbt_run_prod = BashOperator(
         task_id='run_dbt_prod',
-        bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt run --target prod'
+        bash_command=DBT_CMD + 'run --target prod'
     )
 
     dbt_test_prod = BashOperator(
         task_id='dbt_test_prod',
-        bash_command='cd /opt/airflow/repo/repo/dbt_project && dbt test --target prod',
+        bash_command=DBT_CMD + 'test --target prod',
     )
 
-    ingestion >> dbt_deps >> dbt_run >> dbt_test >> dbt_run_prod >> dbt_test_prod
+    ingestion >> dbt_run >> dbt_test >> dbt_run_prod >> dbt_test_prod
